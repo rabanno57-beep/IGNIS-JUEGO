@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Root Knight — El secreto del bosque</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 fill=%27%232f6b3a%27/%3E%3Crect x=%274%27 y=%273%27 width=%278%27 height=%2710%27 fill=%27%236fcf6f%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="screen" width="640" height="480" aria-label="Escena del juego"></canvas>
+    <div id="hud" class="hidden"></div>
+    <div id="hint"></div>
+    <div id="battle-layer"></div>
+    <div id="dialog-layer"></div>
+    <div id="overlay"></div>
+    <div id="toasts" aria-live="polite"></div>
+    <div id="save-indicator" aria-live="polite"><span class="spin">⟳</span> Guardando…</div>
+    <div id="fade"></div>
+  </div>
+  <noscript>Este juego necesita JavaScript.</noscript>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
