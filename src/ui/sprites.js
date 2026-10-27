@@ -23,8 +23,7 @@ export function drawPerson(c, x, y, s, kind, o = {}) {
     case 'raso': case 'armado': case 'defensa': case 'explorador': case 'veterano': case 'comandante': case 'elite':
       soldier(px, LOOK[kind], o.pose, o.step); break;
     case 'marck': {
-      person(flat, '#c99a6b', '#1f3f7a', '#15294f', '#0f1a33', 1.25);
-      flat('#4aa0e0', -9, -30, 18, 2); flat('#4aa0e0', -2, -14, 4, 4); // amuleto
+      marck(px, o.step);
       if (o.aura) { c.globalAlpha = 0.25; flat('#4aa0e0', -14, -36, 28, 36); }
       break;
     }
@@ -69,6 +68,24 @@ function rootknight(px, step = -1) {
   px(CL, 5, -18 + a, 2, 7); px(BOOT, 5, -11 + a, 2, 2);
   px(CLD, -6, -30, 12, 11); px(CL, -5, -31, 9, 2); px(CL, -6, -29, 1, 8); // capucha
   px(MASK, -4, -27, 8, 7); px(VIS, -2, -26, 6, 2); px(VIS, 0, -24, 2, 2); px('#ffd060', -1, -26, 2, 1); // máscara y visor
+}
+
+/** Marck (según sprites/marck.png): pelo rubio oscuro, ojos azules, traje negro, camisa blanca y corbata roja. */
+function marck(px, step = -1) {
+  const SK = '#f8d8c0', HAIR = '#c49a60', HAIRL = '#dcb878', HAIRD = '#9a7440', SUIT = '#26262e', SUITL = '#3c3c48', PA = '#1e1e26', SHOE = '#0e0e12';
+  const a = step === 0 ? 1 : 0, b = step === 1 ? 1 : 0;
+  px(PA, -4, -9 + a, 3, 8 - a); px(SHOE, -4, -2, 4, 2);
+  px(PA, 1, -9 + b, 3, 8 - b); px(SHOE, 1, -2, 4, 2);
+  px(SUIT, -5, -19, 10, 11); px(SUITL, -5, -19, 1, 10); px(SUITL, 4, -19, 1, 10); px(SUITL, -1, -13, 2, 1); // saco con solapas
+  px('#f0f0f0', -2, -19, 4, 2); px('#d02828', -1, -19, 2, 5); px('#a01818', -1, -15, 2, 1); // camisa y corbata
+  px('#4aa0e0', 2, -15, 2, 2); // amuleto
+  px(SUIT, -7, -18 + b, 2, 8); px(SK, -7, -10 + b, 2, 2);
+  px(SUIT, 5, -18 + a, 2, 8); px(SK, 5, -10 + a, 2, 2);
+  px(SK, -5, -28, 10, 9);
+  px(HAIR, -6, -31, 12, 3); px(HAIR, -6, -28, 1, 5); px(HAIR, 5, -28, 1, 5); px(HAIR, -5, -28, 6, 1); // pelo con flequillo
+  px(HAIRL, -3, -31, 3, 1); px(HAIRL, 1, -30, 2, 1); px(HAIRD, -2, -27, 1, 1);
+  px('#2a6ad0', -3, -25, 2, 2); px('#6aa8f0', -3, -24, 2, 1); px('#2a6ad0', 2, -25, 2, 2); px('#6aa8f0', 2, -24, 2, 1); // ojos azules
+  px('#c07868', -1, -21, 2, 1);
 }
 
 // Aspecto de cada clase de mercenario (según las hojas de sprites/).
