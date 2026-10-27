@@ -314,7 +314,7 @@ export class World {
     for (const n of z.npcs) ents.push({ y: n.y * TS + 28, f: () => drawPerson(c, n.x * TS + 16, n.y * TS + 28, 2, n.id === 'ximon' ? 'ximon' : 'aldeano') });
     for (const m of this.mercs) ents.push({ y: m.y, f: () => this.#drawMerc(c, m, t) });
     if (z.marck && !flag('marck_defeated')) ents.push({ y: z.marck.y * TS + 28, f: () => drawPerson(c, z.marck.x * TS + 16, z.marck.y * TS + 28, 2, 'marck', { aura: true }) });
-    ents.push({ y: this.pl.y, f: () => drawPerson(c, this.pl.x, this.pl.y, 2, flag('suit') ? 'rootknight' : 'eduardo', { camo: this.pl.camo, alpha: this.pl.camo ? 0.6 : 1, face: this.pl.face === 'w' ? 'w' : 'e' }) });
+    ents.push({ y: this.pl.y, f: () => drawPerson(c, this.pl.x, this.pl.y, 2, flag('suit') ? 'rootknight' : 'eduardo', { camo: this.pl.camo, alpha: this.pl.camo ? 0.6 : 1, face: this.pl.face === 'w' ? 'w' : 'e', step: this.pl.moving ? Math.floor(t / 150) % 2 : -1 }) });
     ents.sort((a, b) => a.y - b.y).forEach((e) => e.f());
     c.restore();
 
@@ -332,7 +332,7 @@ export class World {
 
   #drawMerc(c, m, t) {
     const face = Math.cos(m.ang) < 0 ? 'w' : 'e';
-    drawPerson(c, m.x, m.y, m.def.boss ? 2 : 2, m.cls, { face });
+    drawPerson(c, m.x, m.y, m.def.boss ? 2 : 2, m.cls, { face, pose: m.state === 'search' ? 'search' : null, step: m.state === 'guard' || m.state === 'search' ? -1 : Math.floor(t / 180) % 2 });
     if (m.state === 'chase') { c.fillStyle = '#ff4040'; c.font = 'bold 18px monospace'; c.fillText('!', m.x - 3, m.y - 62 + Math.sin(t / 80) * 2); }
     else if (m.state === 'search') { c.fillStyle = '#ffd040'; c.font = 'bold 18px monospace'; c.fillText('?', m.x - 4, m.y - 62); }
     if (m.state !== 'chase' && m.grace <= 0 && Math.hypot(m.x - this.pl.x, m.y - this.pl.y) < 340) { // cono de visión tenue

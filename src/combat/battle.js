@@ -399,7 +399,7 @@ export class Battle {
       const ox = e.lunge > 0 ? -30 : 0;
       c.save(); if (e.flash > 0) c.globalAlpha = 0.5 + Math.sin(t / 30) * 0.4;
       const sc = e.sc;
-      if (this.ctrl?.drawEnemy) this.ctrl.drawEnemy(this, c, e, ox, sc, t); else drawPerson(c, e.x + ox, e.feet, sc, e.cls, { face: 'w' });
+      if (this.ctrl?.drawEnemy) this.ctrl.drawEnemy(this, c, e, ox, sc, t); else drawPerson(c, e.x + ox, e.feet, sc, e.cls, { face: 'w', pose: this.enemyPose(e) });
       c.restore();
       this.drawEnemyHud(c, e);
       if (e.aim) { c.strokeStyle = '#ff4040'; c.lineWidth = 2; c.beginPath(); c.arc(150, 210, 22 + Math.sin(t / 100) * 3, 0, 7); c.moveTo(120, 210); c.lineTo(180, 210); c.moveTo(150, 180); c.lineTo(150, 240); c.stroke(); }
@@ -416,6 +416,18 @@ export class Battle {
     this.drawPlayerHud(c);
     this.ctrl?.drawOverlay?.(this, c, t);
     c.restore();
+  }
+
+  /** Pose del sprite según lo que hace o anuncia el mercenario. */
+  enemyPose(e) {
+    const it = e.intent;
+    if (e.lunge > 0) return 'strike';
+    if (e.status.guard) return 'guard';
+    if (!it || e.status.stun > 0 || e.status.bound > 0) return null;
+    if (it.label === 'Embestida') return 'charge';
+    if (it.kind === 'aim' || (it.ranged && it.warn)) return 'aim';
+    if (it.kind === 'call' || it.kind === 'order') return 'radio';
+    return null;
   }
 
   drawEnemyHud(c, e) {
