@@ -3,7 +3,8 @@
 // del poder vegetal (Troncos y Sauces) y los sauces que absorben el agua. Marck nunca muere:
 // al perder toda su vida se retira por el río (final fiel al libro).
 import { game, unlockSkill, setFlag, flag } from '../core/state.js';
-import { drawPerson } from '../ui/sprites.js';
+import { drawPerson, OUTLINE } from '../ui/sprites.js';
+import { pixelPanel, pixelBar, FONT } from '../ui/scenery.js';
 import { dialog } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { rnd, wait } from './battle.js';
@@ -122,32 +123,51 @@ export function createMarckFight() {
     },
 
     drawBackground(b, c, t) {
+      // río con orilla de piedra y ondas que corren
+      c.fillStyle = '#0a0d16'; c.fillRect(0, 282, 640, 4);
+      c.fillStyle = '#4a5674'; c.fillRect(0, 282, 640, 2);
       c.fillStyle = '#1d4f8a'; c.fillRect(0, 286, 640, 34);
-      c.fillStyle = '#3f86d0'; for (let x = 0; x < 640; x += 40) c.fillRect(x + ((t / 30) % 40), 296, 20, 3);
+      c.fillStyle = '#173f70'; for (let x = 0; x < 640; x += 64) c.fillRect(x + 20, 306, 30, 2);
+      c.fillStyle = '#3f86d0'; for (let x = -40; x < 640; x += 40) c.fillRect(Math.round((x + t / 30) % 680 / 2) * 2, 294, 20, 2);
+      c.fillStyle = '#7ab8ee'; for (let x = -60; x < 640; x += 60) c.fillRect(Math.round((x + t / 22) % 700 / 2) * 2, 300, 8, 2);
       // sauces
       for (let i = 0; i < b.willows; i++) {
-        const x = 250 + i * 44;
-        c.fillStyle = '#4a3320'; c.fillRect(x + 8, 200, 8, 70);
-        c.fillStyle = '#4f9a50'; c.fillRect(x - 6, 168, 36, 22); for (let k = 0; k < 4; k++) c.fillRect(x - 6 + k * 10, 188, 4, 34 + Math.sin(t / 300 + k) * 4);
+        const x = 250 + i * 44, sw = (k) => Math.round(Math.sin(t / 300 + k) * 2) * 2;
+        c.fillStyle = OUTLINE; c.fillRect(x + 6, 198, 12, 74); c.fillRect(x - 8, 166, 40, 26);
+        c.fillStyle = '#4a3320'; c.fillRect(x + 8, 200, 8, 70); c.fillStyle = '#6a4a2e'; c.fillRect(x + 8, 200, 2, 70);
+        c.fillStyle = '#3f8a42'; c.fillRect(x - 6, 168, 36, 22); c.fillStyle = '#5aa452'; c.fillRect(x - 4, 168, 20, 4);
+        for (let k = 0; k < 5; k++) { // ramas colgantes
+          const h = 32 + ((k * 7) % 12) + sw(k);
+          c.fillStyle = OUTLINE; c.fillRect(x - 8 + k * 8, 188, 6, h + 2);
+          c.fillStyle = k % 2 ? '#4f9a50' : '#3f8a42'; c.fillRect(x - 6 + k * 8, 188, 2, h);
+          c.fillStyle = '#7cc46a'; c.fillRect(x - 6 + k * 8, 188 + h - 4, 2, 2);
+        }
       }
     },
 
     drawEnemy(b, c, e, ox, sc, t) {
       const m = b.marck;
-      if (m.water > 0) { // orbes de agua
-        c.fillStyle = 'rgba(80,170,240,.65)';
-        for (let i = 0; i < 4; i++) { const a = t / 500 + i * 1.57; c.beginPath(); c.arc(e.x + Math.cos(a) * 70, e.feet - 90 + Math.sin(a) * 36, 6 + (m.water / 100) * 8, 0, 7); c.fill(); }
+      if (m.water > 0) { // orbes de agua (círculos pixelados)
+        const r = 6 + Math.round((m.water / 100) * 4) * 2;
+        for (let i = 0; i < 4; i++) {
+          const a = t / 500 + i * 1.57, cx = Math.round((e.x + Math.cos(a) * 70) / 2) * 2, cy = Math.round((e.feet - 90 + Math.sin(a) * 36) / 2) * 2;
+          for (let dy = -r; dy <= r; dy += 2) {
+            const hw = Math.round(Math.sqrt(r * r - dy * dy) / 2) * 2;
+            c.fillStyle = dy < -r / 3 ? 'rgba(170,220,255,.8)' : 'rgba(80,170,240,.7)'; c.fillRect(cx - hw, cy + dy, hw * 2, 2);
+          }
+          c.fillStyle = '#ffffff'; c.fillRect(cx - r / 2, cy - r / 2, 2, 2);
+        }
       }
       drawPerson(c, e.x + ox, e.feet, sc, 'marck', { face: 'w', aura: m.water > 0 });
     },
 
     drawOverlay(b, c) {
-      const m = b.marck, x = 420, y = 20;
-      c.fillStyle = 'rgba(0,0,0,.65)'; c.fillRect(x - 6, y - 6, 212, 56);
-      c.fillStyle = '#fff'; c.font = '11px monospace'; c.fillText('Agua del río', x, y + 8);
-      c.fillStyle = '#12304f'; c.fillRect(x, y + 12, 200, 8); c.fillStyle = '#4aa0e0'; c.fillRect(x, y + 12, 2 * m.water, 8);
-      c.fillStyle = '#fff'; c.fillText('Presión', x, y + 34);
-      c.fillStyle = '#3a2a12'; c.fillRect(x, y + 38, 200, 8); c.fillStyle = m.pressure >= 70 ? '#ff6040' : '#d0a040'; c.fillRect(x, y + 38, 2 * (m.pressure / MAX_PRESSURE) * 100, 8);
+      const m = b.marck, x = 176, y = 20; // centrado: a la derecha va la intención de Marck
+      pixelPanel(c, x - 8, y - 8, 216, 60, '#4aa0e0', '#0e1a2a');
+      c.fillStyle = '#fff'; c.font = `12px ${FONT}`; c.fillText('Agua del río', x, y + 6);
+      pixelBar(c, x, y + 12, 200, 8, m.water / MAX_WATER, '#4aa0e0', '#12304f');
+      c.fillStyle = '#fff'; c.fillText('Presión', x, y + 32);
+      pixelBar(c, x, y + 38, 200, 8, m.pressure / MAX_PRESSURE, m.pressure >= 70 ? '#ff6040' : '#d0a040', '#3a2a12');
     },
   };
 }

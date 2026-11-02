@@ -6,6 +6,7 @@ import { ZONES_DATA } from '../data/zones.js';
 import { DEFAULT_CONTROLS } from '../save/schema.js';
 import { input, ACTION_LABELS, keyName } from '../core/input.js';
 import { el, showScreen, menuButton, toast } from './ui.js';
+import { drawPerson } from './sprites.js';
 import { sfx } from '../core/audio.js';
 
 const fmtDate = (ts) => new Date(ts).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
@@ -83,10 +84,28 @@ export function quests(back) {
     q.done.length ? el('ul', { class: 'items done' }, q.done.map((id) => el('li', {}, el('div', {}, el('b', {}, `✔ ${QUESTS[id].title}`))))) : el('p', {}, 'Ninguna todavía.'));
 }
 
+/** Retrato del mercenario tal como se ve en el mapa (mismo sprite y escala). */
+function portrait(cls) {
+  const cv = el('canvas', { class: 'portrait', width: 72, height: 80, 'aria-hidden': 'true' });
+  drawPerson(cv.getContext('2d'), 36, 76, 2, cls);
+  return cv;
+}
+
+/** Zonas donde patrulla cada clase, según los datos del mapa. */
+function whereFound(cls) {
+  return Object.values(ZONES_DATA).filter((z) => z.mercs.some((m) => m.cls === cls)).map((z) => z.name.split(' — ')[0]);
+}
+
 export function bestiary(back) {
   listScreen('Mercenarios de Marck', back,
     el('p', { class: 'fine' }, 'Los trabajadores armados que protegen la búsqueda del artefacto. Marck es otro asunto.'),
-    el('ul', { class: 'items' }, Object.values(MERC).map((m) => el('li', {}, el('div', {}, el('b', {}, m.name), el('small', {}, m.desc), el('small', { class: 'tip' }, `Estrategia: ${m.strategy}`))))));
+    el('ul', { class: 'items' }, Object.entries(MERC).map(([cls, m]) => {
+      const zones = whereFound(cls);
+      return el('li', { class: 'merc' }, portrait(cls), el('div', {},
+        el('b', {}, m.name), el('small', {}, m.desc),
+        zones.length ? el('small', { class: 'where' }, `Aparece en: ${zones.join(', ')}`) : null,
+        el('small', { class: 'tip' }, `Estrategia: ${m.strategy}`)));
+    })));
 }
 
 export function options(back, cb) {

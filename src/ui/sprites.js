@@ -1,35 +1,98 @@
 // Sprites pixel-art dibujados con rectángulos (sin archivos de imagen).
+// Cada personaje se "hornea" una sola vez a escala 1 en un lienzo pequeño (con volumen en los bordes
+// y contorno oscuro) y luego se dibuja ampliado sin suavizado: píxeles nítidos a cualquier escala.
 // Cada clase de mercenario tiene una silueta distinta para reconocerla de un vistazo.
 const R = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), w, h); };
+const canvas = (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h });
+export const OUTLINE = '#140f0b';
+
+const SW = 50, SH = 40, OX = 25, OY = 37; // lienzo de cada sprite y posición de los pies
+const baked = new Map();
 
 /** Dibuja un personaje de ~16x24 "píxeles" escalados por s. (x,y) = pies centrados. */
 export function drawPerson(c, x, y, s, kind, o = {}) {
-  const f = o.face === 'w' ? -1 : 1; // sólo espeja armas
   if (kind === 'comandante') s *= 1.15; // el jefe es más grande
-  const px = (col, dx, dy, w, h) => R(c, col, x + dx * s * f - (f < 0 ? w * s : 0), y + dy * s, w * s, h * s);
-  const flat = (col, dx, dy, w, h) => R(c, col, x + dx * s, y + dy * s, w * s, h * s);
+  const key = `${kind}|${o.face === 'w' ? 'w' : 'e'}|${o.pose ?? ''}|${o.step ?? -1}|${o.camo ? 1 : 0}`;
+  let spr = baked.get(key);
+  if (!spr) baked.set(key, (spr = bake(kind, o)));
   c.save();
+  c.imageSmoothingEnabled = false;
   if (o.alpha != null) c.globalAlpha = o.alpha;
-  flat('rgba(0,0,0,.28)', -7, -2, 14, 3); // sombra
+  const sx = (v) => Math.round(x + v * s), sy = (v) => Math.round(y + v * s);
+  const shadow = (dx, dy, w, h) => c.fillRect(sx(dx), sy(dy), sx(dx + w) - sx(dx), sy(dy + h) - sy(dy));
+  c.fillStyle = 'rgba(0,0,0,.28)'; // sombra elíptica
+  shadow(-5, -3, 10, 1); shadow(-7, -2, 14, 2); shadow(-5, 0, 10, 1);
+  const dx = sx(-OX), dy = sy(-OY);
+  if (o.aura) {
+    spr.glow ??= glow(spr.src, '#4aa0e0');
+    const a = c.globalAlpha;
+    c.globalAlpha = a * (0.5 + Math.sin(performance.now() / 260) * 0.2);
+    c.drawImage(spr.glow, dx, dy, SW * s, SH * s);
+    c.globalAlpha = a;
+  }
+  c.drawImage(spr, dx, dy, SW * s, SH * s);
+  c.restore();
+}
+
+function bake(kind, o) {
+  const cv = canvas(SW, SH), c = cv.getContext('2d', { willReadFrequently: true });
+  const f = o.face === 'w' ? -1 : 1; // sólo espeja armas
+  const px = (col, dx, dy, w, h) => R(c, col, OX + dx * f - (f < 0 ? w : 0), OY + dy, w, h);
+  const flat = (col, dx, dy, w, h) => R(c, col, OX + dx, OY + dy, w, h);
+  let camo = false;
   switch (kind) {
     case 'eduardo': eduardo(px, o.step); break;
-    case 'rootknight': {
-      rootknight(px, o.step);
-      if (o.camo) { c.globalAlpha = 0.45; flat('#2f6b3a', -9, -32, 18, 32); }
-      break;
-    }
+    case 'rootknight': rootknight(px, o.step); camo = o.camo; break;
     case 'ximon': person(flat, '#c99a6b', '#c9a23a', '#3a3f55', '#1d1d1d'); break;
     case 'aldeano': person(flat, '#d9a877', '#b0508a', '#5a3f55', '#999'); break;
     case 'raso': case 'armado': case 'defensa': case 'explorador': case 'veterano': case 'comandante': case 'elite':
       soldier(px, LOOK[kind], o.pose, o.step); break;
-    case 'marck': {
-      marck(px, o.step);
-      if (o.aura) { c.globalAlpha = 0.25; flat('#4aa0e0', -14, -36, 28, 36); }
-      break;
-    }
+    case 'marck': marck(px, o.step); break;
     default: person(flat, '#999', '#666', '#333', '#222');
   }
-  c.restore();
+  if (camo) { // el traje se funde con el verde del bosque
+    c.globalCompositeOperation = 'source-atop'; c.globalAlpha = 0.45;
+    c.fillStyle = '#2f6b3a'; c.fillRect(0, 0, SW, SH);
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  }
+  shade(c);
+  return outline(cv);
+}
+
+/** Volumen: aclara los bordes de arriba/izquierda y oscurece los de abajo/derecha de cada pieza. */
+function shade(c) {
+  const img = c.getImageData(0, 0, SW, SH), d = img.data, src = new Uint8ClampedArray(d);
+  const solid = (x, y) => x >= 0 && y >= 0 && x < SW && y < SH && src[(y * SW + x) * 4 + 3] > 0;
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+    if (!solid(x, y)) continue;
+    const k = !solid(x + 1, y) || !solid(x, y + 1) ? 0.74 : !solid(x - 1, y) || !solid(x, y - 1) ? 1.2 : 1;
+    if (k === 1) continue;
+    const i = (y * SW + x) * 4;
+    for (let j = 0; j < 3; j++) d[i + j] = Math.min(255, src[i + j] * k);
+  }
+  c.putImageData(img, 0, 0);
+}
+
+function tinted(src, col) {
+  const cv = canvas(SW, SH), c = cv.getContext('2d');
+  c.drawImage(src, 0, 0); c.globalCompositeOperation = 'source-in'; c.fillStyle = col; c.fillRect(0, 0, SW, SH);
+  return cv;
+}
+
+/** Contorno de 1 píxel alrededor de la silueta. Guarda el sprite sin contorno para el halo. */
+function outline(src) {
+  const sil = tinted(src, OUTLINE), cv = canvas(SW, SH), c = cv.getContext('2d');
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) c.drawImage(sil, dx, dy);
+  c.drawImage(src, 0, 0);
+  cv.src = src;
+  return cv;
+}
+
+/** Halo de ~3 píxeles alrededor de la silueta (aura del amuleto). */
+function glow(src, col) {
+  const t = tinted(src, col), cv = canvas(SW, SH), c = cv.getContext('2d');
+  for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (Math.abs(dx) + Math.abs(dy) <= 4) c.drawImage(t, dx, dy);
+  return cv;
 }
 
 function person(flat, skin, shirt, pants, hair, k = 1) {
@@ -176,26 +239,215 @@ function soldier(px, L, pose, step = -1) {
   if (L.shield) shield(4, -19, 16);
 }
 
+/* ── Objetos del mundo, en píxeles de arte de 2 px (la misma escala que los personajes en el mapa) ── */
+const OL = OUTLINE;
+
+/** Pinceles relativos a (x,y) con unidad u: P = rectángulo, box = con contorno, blob = esquinas redondeadas. */
+export function painter(c, x, y, u = 2) {
+  const P = (col, dx, dy, w = 1, h = 1) => { c.fillStyle = col; c.fillRect(x + Math.round(dx) * u, y + Math.round(dy) * u, w * u, h * u); };
+  const box = (col, dx, dy, w, h) => { P(OL, dx - 1, dy - 1, w + 2, h + 2); P(col, dx, dy, w, h); };
+  const blob = (col, bx, by, bw, bh, k = 2) => {
+    for (let i = 0; i < bh; i++) { const s = Math.max(0, k - i, k - (bh - 1 - i)); P(col, bx + s, by + i, bw - 2 * s, 1); }
+  };
+  const oblob = (col, bx, by, bw, bh, k = 2) => { blob(OL, bx - 1, by - 1, bw + 2, bh + 2, k); blob(col, bx, by, bw, bh, k); };
+  return { P, box, blob, oblob };
+}
+
+/** Aclara (k>0) u oscurece (k<0) un color #rrggbb. */
+function tone(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (v) => Math.max(0, Math.min(255, Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k)));
+  return `rgb(${ch(n >> 16)},${ch((n >> 8) & 255)},${ch(n & 255)})`;
+}
+const SHADOW = 'rgba(0,0,0,.25)';
+
 export function drawChest(c, x, y, open) {
-  R(c, '#6b4423', x + 4, y + 12, 24, 14); R(c, '#8a5a2e', x + 4, y + 12, 24, 4);
-  R(c, open ? '#222' : '#d8c060', x + 14, y + 16, 4, 4);
-  if (open) R(c, '#8a5a2e', x + 4, y + 6, 24, 6);
+  const { P, box } = painter(c, x, y);
+  P(SHADOW, 2, 14, 12, 2);
+  if (open) { box('#6b4423', 3, 2, 10, 4); P('#8a5a2e', 3, 2, 10, 1); }
+  box('#8a5a2e', 2, 7, 12, 7); P('#a8723a', 2, 7, 12, 1); P('#6b4423', 2, 12, 12, 2);
+  P('#d8b048', 4, 7, 1, 7); P('#d8b048', 11, 7, 1, 7);
+  if (open) { P('#24160a', 3, 7, 10, 2); P('#ffe9a0', 6, 7); P('#ffe9a0', 9, 8); }
+  else {
+    box('#9a6634', 2, 4, 12, 3); P('#b88048', 2, 4, 12, 1); P('#d8b048', 4, 4, 1, 3); P('#d8b048', 11, 4, 1, 3);
+    box('#f0d060', 7, 6, 2, 2); P('#6a4a10', 7, 7, 1, 1);
+  }
+}
+
+export function drawSavepoint(c, x, y, on, t) {
+  const { P, box } = painter(c, x, y), col = on ? '#7dff9a' : '#3f9f5a', g = on ? '125,255,154' : '63,159,90';
+  P(SHADOW, 3, 14, 10, 2);
+  box('#6c727c', 4, 11, 8, 4); P('#8a8f99', 4, 11, 8, 1);
+  const fy = Math.sin(t / 300) * 1.5, a = 0.18 + Math.sin(t / 250) * 0.08;
+  P(`rgba(${g},${a.toFixed(2)})`, 3, fy - 1, 10, 11); P(`rgba(${g},${(a * 1.6).toFixed(2)})`, 5, fy + 1, 6, 7);
+  P(OL, 7, fy, 2, 1); P(OL, 6, fy + 1, 4, 1); P(OL, 5, fy + 2, 6, 4); P(OL, 6, fy + 6, 4, 1); P(OL, 7, fy + 7, 2, 1);
+  P(col, 7, fy + 1, 2, 1); P(col, 6, fy + 2, 4, 4); P(col, 7, fy + 6, 2, 1);
+  P('#eafff0', 7, fy + 2, 1, 2); P('rgba(0,0,0,.2)', 8, fy + 3, 2, 3);
+}
+
+export function drawHook(c, x, y, t) {
+  const { P, box, oblob } = painter(c, x, y);
+  P(SHADOW, 5, 14, 6, 2);
+  box('#5a3c22', 7, 6, 2, 9); P('#7a5432', 7, 6, 1, 9);
+  oblob('#3f8f4a', 4, 0, 8, 7, 2); P('#5ab060', 5, 1, 3, 1);
+  P(`rgba(210,250,210,${(0.6 + Math.sin(t / 250) * 0.4).toFixed(2)})`, 7, 2, 2, 3);
+}
+
+/** Destello en cruz centrado en (x,y). */
+export function drawSparkle(c, x, y, a, col = '#fff6a0') {
+  const { P } = painter(c, Math.round(x / 2) * 2, Math.round(y / 2) * 2);
+  c.save(); c.globalAlpha = Math.max(0, Math.min(1, a));
+  P(col, 0, -2, 1, 5); P(col, -2, 0, 5, 1); P('#ffffff', 0, 0);
+  c.restore();
+}
+
+const GLYPH = { '!': ['.#.', '.#.', '.#.', '...', '.#.'], '?': ['##.', '..#', '.#.', '...', '.#.'] };
+/** Globo de "!" o "?" sobre un personaje; (x,y) = centro inferior aproximado. */
+export function drawBubble(c, x, y, ch, col) {
+  const { P, box } = painter(c, Math.round(x) - 7, Math.round(y) - 20);
+  box('#fffaf0', 0, 0, 7, 8);
+  P('#fffaf0', 3, 8); P(OL, 3, 9);
+  GLYPH[ch].forEach((row, j) => [...row].forEach((v, i) => { if (v === '#') P(col, 2 + i, 1 + j + 1); }));
 }
 
 export function drawProp(c, p, t) {
-  const x = p.x * 32, y = p.y * 32, w = p.w * 32, h = p.h * 32;
+  const g = painter(c, p.x * 32, p.y * 32), w = p.w * 16, h = p.h * 16;
   switch (p.type) {
-    case 'house': R(c, p.color, x, y + 16, w, h - 16); R(c, '#5a2f1d', x - 4, y, w + 8, 20); R(c, '#2a1a10', x + w / 2 - 8, y + h - 24, 16, 24); R(c, '#e8d9a0', x + 8, y + 28, 12, 12); break;
-    case 'fountain': R(c, '#8a8f99', x, y, w, h); R(c, '#4aa0e0', x + 6, y + 6, w - 12, h - 12); R(c, '#9bd4f5', x + w / 2 - 3, y + 8 + Math.sin(t / 200) * 2, 6, 14); break;
-    case 'tent': R(c, '#7a7a52', x, y + 12, w, h - 12); R(c, '#5a5a38', x + 8, y, w - 16, 14); R(c, '#2a2a1a', x + w / 2 - 6, y + h - 20, 12, 20); break;
-    case 'machine': R(c, '#c9a227', x, y + 12, w, h - 12); R(c, '#555', x + 6, y + h - 14, w - 12, 14); R(c, '#333', x + w - 22, y, 12, 28); R(c, '#e0e0e0', x + 8, y + 18, 20, 12); break;
-    case 'crate': R(c, '#8a6a3a', x + 2, y + 4, w - 4, h - 4); R(c, '#6a4a22', x + 2, y + 4, w - 4, 4); R(c, '#6a4a22', x + w / 2 - 1, y + 4, 2, h - 4); break;
-    case 'sign': R(c, '#6a4a22', x + 14, y + 8, 4, 22); R(c, '#c8b27a', x + 2, y + 2, 28, 14); break;
-    case 'barricade': R(c, '#6a4a22', x + 4, y, 8, h); R(c, '#8a6a3a', x + 12, y + 4, 8, h - 8); R(c, '#aaa', x, y + h / 2, w, 3); break;
-    case 'door': R(c, '#3a3a40', x, y, w, h); R(c, '#6a5a3a', x + 4, y + 4, w - 8, h - 8); R(c, '#d8c060', x + w - 10, y + h / 2, 4, 4); break;
-    case 'stele': R(c, '#8a8f99', x + 6, y + 2, 20, 28); R(c, '#5a5f69', x + 10, y + 6, 12, 3); R(c, '#5a5f69', x + 10, y + 12, 12, 3); R(c, '#5a5f69', x + 10, y + 18, 8, 3); break;
-    case 'altar': R(c, '#5a5f69', x, y, w, h); R(c, '#4aa0e0', x + w / 2 - 6, y + 6 + Math.sin(t / 300) * 2, 12, 12); break;
-    case 'stairs': for (let i = 0; i < 4; i++) R(c, i % 2 ? '#6f747d' : '#7f848d', x + 8 * i, y + i * 8, w - 16 * i, 8); break;
-    default: R(c, '#888', x, y, w, h);
+    case 'house': house(g, p.color, w, h); break;
+    case 'fountain': fountain(g, w, h, t); break;
+    case 'tent': tent(g, w, h); break;
+    case 'machine': machine(g, w, h, t); break;
+    case 'crate': for (let i = 0; i < p.w; i++) for (let j = 0; j < p.h; j++) crate(g, i * 16, j * 16); break;
+    case 'sign': sign(g); break;
+    case 'barricade': barricade(g, w, h); break;
+    case 'door': door(g, w, h, t); break;
+    case 'stele': stele(g); break;
+    case 'altar': altar(g, w, h, t); break;
+    case 'stairs': stairs(g, w, h); break;
+    default: g.box('#888', 0, 0, w, h);
+  }
+}
+
+function house({ P, box }, col, w, h) {
+  const top = 18, dk = tone(col, -0.28), lt = tone(col, 0.18);
+  P(SHADOW, 1, h - 1, w - 2, 2);
+  box('#7a6a60', w - 18, -4, 5, 10); P('#958478', w - 18, -4, 5, 1); // chimenea
+  box(col, 2, top, w - 4, h - top - 1);
+  for (let yy = top + 4; yy < h - 1; yy += 4) P(dk, 2, yy, w - 4, 1); // tablones
+  P(lt, 2, top, 1, h - top - 1);
+  for (const wx of [7, w - 16]) { // ventanas iluminadas
+    box('#f4e2a0', wx, top + 7, 9, 7); P('#e0c070', wx, top + 11, 9, 3);
+    P(OL, wx, top + 10, 9, 1); P(OL, wx + 4, top + 7, 1, 7); P(dk, wx - 1, top + 15, 11, 1);
+  }
+  const dx = (w >> 1) - 5; // puerta
+  box('#5a3420', dx, h - 16, 10, 15); P('#744828', dx + 1, h - 15, 3, 14); P('#3a2010', dx + 5, h - 16, 1, 15); P('#e8c860', dx + 7, h - 9);
+  for (let i = 0; i < 20; i++) { // tejado de tejas
+    const s = Math.max(0, 9 - i), x0 = -3 + s, rw = w + 6 - 2 * s;
+    P(OL, x0 - 1, i, rw + 2, 1);
+    P(i < 2 ? '#c06848' : i % 4 === 3 ? '#6e2f1c' : '#94452c', x0, i, rw, 1);
+    if (i % 4 === 1) for (let sx = x0 + ((i >> 2) % 2) * 3 + 2; sx < x0 + rw - 1; sx += 6) P('#7a3622', sx, i, 1, 2);
+  }
+  P(OL, 5, -1, w - 10, 1); P(OL, -4, 20, w + 8, 1);
+  P('rgba(0,0,0,.3)', 2, 21, w - 4, 2); // sombra del alero
+}
+
+function fountain({ P, box, blob, oblob }, w, h, t) {
+  P(SHADOW, 2, h - 2, w - 4, 2);
+  oblob('#a4aab4', 1, 10, w - 2, h - 12, 4);
+  blob('#7c828c', 2, h - 8, w - 4, 5, 3);
+  blob('#2a64a8', 4, 12, w - 8, h - 21, 3);
+  const k = (t / 140) | 0;
+  P('#5aa0e0', 6 + (k % 6), 15, 3, 1); P('#5aa0e0', 19 - (k % 5), 19, 4, 1);
+  box('#8a909a', 14, 4, 4, 13); P('#a4aab4', 14, 4, 1, 13);
+  oblob('#a4aab4', 11, 3, 10, 3, 1);
+  for (let i = 0; i < 6; i++) { // gotas del chorro
+    const q = (t / 600 + i / 6) % 1, side = i % 2 ? -1 : 1;
+    P('#9ad0f5', 15.5 + side * (1 + q * 6), 2 - Math.sin(q * Math.PI) * 4 + q * 9);
+  }
+  P('#cfe8fa', 15, -1 + Math.sin(t / 180), 2, 4);
+}
+
+function tent({ P }, w, h) {
+  const H = h - 3, cx = w >> 1, eh = (H * 0.55) | 0;
+  P(SHADOW, 1, H, w - 2, 3);
+  P('#5a4020', cx - 1, -3, 2, 3); P(OL, cx - 2, -1, 4, 1);
+  for (let i = 0; i < H; i++) {
+    const hw = Math.round(((i + 1) / H) * (cx - 2)) + 1;
+    P(OL, cx - hw - 1, i, hw * 2 + 2, 1);
+    P('#8e8e60', cx - hw, i, hw, 1); P('#6c6c46', cx, i, hw, 1);
+    if (i > 2) P('#a4a470', cx - hw, i);
+  }
+  P(OL, 0, H, w, 1);
+  for (let i = 0; i < eh; i++) { const hw = Math.max(1, Math.round(((i + 1) / eh) * (w / 7))); P('#2a2414', cx - hw, H - eh + i, hw * 2, 1); }
+  P('#b8b080', cx - 1, 0, 1, H - eh); // costura
+  P('#d8d0b0', 0, H - 2, 1, 2); P('#d8d0b0', w - 1, H - 2, 1, 2); // estacas
+}
+
+function machine({ P, box, oblob }, w, h, t) {
+  const b = h - 2;
+  P(SHADOW, 1, b, w - 2, 2);
+  oblob('#3a3a3e', 2, b - 9, 34, 9, 3); P('#55555a', 4, b - 9, 30, 1); // orugas
+  for (let k = 0; k < 4; k++) { P('#6a6a70', 5 + k * 8, b - 6, 4, 4); P('#2a2a2e', 6 + k * 8, b - 5, 2, 2); }
+  box('#d8a828', 4, b - 22, 30, 12); P('#f0c848', 4, b - 22, 30, 2); P('#a87c18', 4, b - 12, 30, 2);
+  for (let k = 0; k < 5; k++) P('#2a2a2a', 6 + k * 6, b - 17, 3, 2); // franjas de peligro
+  box('#d8a828', 20, b - 34, 13, 12); P('#f0c848', 20, b - 34, 13, 1); // cabina
+  box('#7ab4c8', 23, b - 31, 8, 6); P('#d8f0f8', 24, b - 30, 3, 2);
+  box('#555', 7, b - 30, 2, 8); // escape y humo
+  const sm = (t / 500) % 1; P(`rgba(200,200,200,${(0.5 * (1 - sm)).toFixed(2)})`, 6 - sm * 2, b - 33 - sm * 8, 3, 2);
+  for (let k = 0; k < 12; k++) P(OL, 33 + k, b - 23 - k * 1.5, 3, 3); // brazo
+  for (let k = 0; k < 12; k++) P('#c89820', 34 + k, b - 22 - k * 1.5, 2, 2);
+  box('#6a6a70', 42, b - 42, 5, 6); P('#cccccc', 42, b - 36); P('#cccccc', 45, b - 36);
+}
+
+function crate({ P, box }, ox, oy) {
+  P(SHADOW, ox + 1, oy + 14, 14, 2);
+  box('#a07840', ox + 1, oy + 2, 14, 12);
+  P('#c09858', ox + 1, oy + 2, 14, 1); P('#6a4a22', ox + 1, oy + 13, 14, 1);
+  P('#7a5a2e', ox + 1, oy + 2, 1, 12); P('#7a5a2e', ox + 14, oy + 2, 1, 12);
+  for (let k = 0; k < 10; k++) P('#7a5a2e', ox + 3 + k, oy + 3 + k);
+}
+
+function sign({ P, box }) {
+  P(SHADOW, 4, 14, 8, 2);
+  box('#5a3c22', 7, 8, 2, 7);
+  box('#c8a868', 1, 1, 14, 8); P('#e0c488', 1, 1, 14, 1); P('#9a7a48', 1, 8, 14, 1);
+  P('#6a4a2a', 3, 3, 9, 1); P('#6a4a2a', 3, 5, 6, 1); P('#888888', 2, 2); P('#888888', 13, 2);
+}
+
+function barricade({ P, box }, w, h) {
+  for (const x of [1, 11]) { box('#5a3c22', x, 2, 3, h - 3); P('#7a5432', x, 2, 1, h - 3); P('#5a3c22', x + 1, 0, 1, 2); }
+  for (let y = 6; y < h - 4; y += 12) { box('#8a6a3a', 0, y, w, 4); P('#a8844e', 0, y, w, 1); P('#c8a070', 0, y + 1, 1, 2); P('#c8a070', w - 1, y + 1, 1, 2); }
+  for (let y = 12; y < h - 4; y += 12) for (let x = 0; x < w; x += 3) P('#b8b8b8', x, y + ((x / 3) % 2), 2, 1); // alambre
+}
+
+function door({ P, box }, w, h, t) {
+  box('#5a5f69', 0, 0, w, h); P('#7a808a', 0, 0, w, 1); P('#454a54', w - 1, 0, 1, h);
+  box('#2e2620', 3, 4, w - 6, h - 4); P('#3e342a', 3, 4, 1, h - 4);
+  const gl = `rgba(90,200,255,${(0.55 + Math.sin(t / 400) * 0.35).toFixed(2)})`; // glifos que brillan
+  P(gl, 6, 10, 4, 1); P(gl, 6, 11, 1, 4); P(gl, 9, 11, 1, 2); P(gl, 7, 14, 3, 1); P(gl, 7, 18, 2, 6); P(gl, 5, 20, 6, 1);
+}
+
+function stele({ P, oblob }) {
+  P(SHADOW, 3, 14, 11, 2);
+  oblob('#8a8f99', 3, 0, 10, 15, 2); P('#a4aab4', 4, 1, 1, 13); P('#6c727c', 11, 2, 1, 12);
+  for (const [gx, gy, gw] of [[5, 3, 5], [5, 6, 3], [5, 9, 5], [6, 12, 3]]) P('#4a4f59', gx, gy, gw, 1);
+  P('#4a8a3a', 3, 13, 3, 2); P('#5aa048', 4, 12);
+}
+
+function altar({ P, box }, w, h, t) {
+  box('#5a5f69', 2, 6, w - 4, h - 6); P('#7a808a', 2, 6, w - 4, 1); P('#454a54', 2, h - 2, w - 4, 2);
+  for (let x = 5; x < w - 5; x += 6) P('#454a54', x, 9, 3, 2);
+  const gy = Math.round(Math.sin(t / 300) * 1.5), cx = w / 2 - 1; // gema flotante
+  P('rgba(74,160,224,.22)', cx - 4, gy - 5, 10, 10); P('rgba(74,160,224,.3)', cx - 2, gy - 3, 6, 6);
+  P(OL, cx, gy - 3, 2, 1); P('#4aa0e0', cx, gy - 2, 2, 1); P('#4aa0e0', cx - 1, gy - 1, 4, 2);
+  P('#2a70b0', cx + 1, gy, 2, 1); P('#4aa0e0', cx, gy + 1, 2, 1); P('#cfeaff', cx, gy - 1);
+}
+
+function stairs({ P }, w, h) {
+  const n = 4, sh = h / n;
+  for (let i = 0; i < n; i++) {
+    const s = i * 4, y = i * sh, ww = w - 2 * s;
+    P(OL, s - 1, y, ww + 2, sh);
+    P('#7f848d', s, y, ww, sh); P('#a0a5ae', s, y, ww, 1); P('#5f646d', s, y + sh - 3, ww, 3);
   }
 }

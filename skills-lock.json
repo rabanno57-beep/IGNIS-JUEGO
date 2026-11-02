@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "layer-pixel-art": {
+      "source": "layerai/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/layer/skills/layer-pixel-art/SKILL.md",
+      "computedHash": "9586d52bab374f50fde80b4f4448768d3c319c91ee6dd96944718ea2eb34ac5c"
+    }
+  }
+}

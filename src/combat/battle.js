@@ -4,6 +4,7 @@ import { game, hasSkill, markDefeated, addItem, gainXp, useConsumable, setFlag }
 import { SKILLS, ITEMS } from '../data/content.js';
 import { MERC } from '../data/mercenaries.js';
 import { drawPerson } from '../ui/sprites.js';
+import { drawBattleBackdrop, pixelPanel, pixelBar, FONT } from '../ui/scenery.js';
 import { el, $ } from '../ui/ui.js';
 import { sfx } from '../core/audio.js';
 import { bus } from '../core/events.js';
@@ -25,7 +26,7 @@ export function makeEnemy(d) {
   };
 }
 
-const W = 640, H = 320;
+const W = 640;
 
 export class Battle {
   /**
@@ -382,12 +383,7 @@ export class Battle {
     c.save();
     if (this.shake > 0) c.translate(rnd(-this.shake, this.shake) / 2, rnd(-this.shake, this.shake) / 2);
     const temple = this.ctrl?.id === 'marck' || game.state.zone === 'templo';
-    const g = c.createLinearGradient(0, 0, 0, H);
-    if (temple) { g.addColorStop(0, '#0e1a2a'); g.addColorStop(1, '#1f2f45'); } else { g.addColorStop(0, '#14301c'); g.addColorStop(1, '#2d5a31'); }
-    c.fillStyle = g; c.fillRect(0, 0, W, H);
-    c.fillStyle = temple ? '#2a3550' : '#3a6b3a'; c.fillRect(0, 232, W, 88);
-    c.fillStyle = 'rgba(0,0,0,.18)'; for (let x = 0; x < W; x += 48) c.fillRect(x, 232, 24, 88);
-    if (!temple) { c.fillStyle = '#1d4020'; for (let x = 0; x < W; x += 70) { c.fillRect(x + 20, 40, 14, 190); c.fillStyle = '#245c2a'; c.fillRect(x - 6, 20, 60, 70); c.fillStyle = '#1d4020'; } }
+    drawBattleBackdrop(c, temple, t);
     this.ctrl?.drawBackground?.(this, c, t);
 
     drawPerson(c, 150, 248, 4, game.state.flags.suit ? 'rootknight' : 'eduardo', { face: 'e' });
@@ -404,11 +400,11 @@ export class Battle {
       this.drawEnemyHud(c, e);
       if (e.aim) { c.strokeStyle = '#ff4040'; c.lineWidth = 2; c.beginPath(); c.arc(150, 210, 22 + Math.sin(t / 100) * 3, 0, 7); c.moveTo(120, 210); c.lineTo(180, 210); c.moveTo(150, 180); c.lineTo(150, 240); c.stroke(); }
       if (e.status.guard) { c.fillStyle = 'rgba(180,200,230,.55)'; c.fillRect(e.x - 14 * e.sc * 0.5 - 10, e.feet - 22 * e.sc * 0.75, 8, 20 * e.sc * 0.75); }
-      if (e.status.stun > 0) { c.fillStyle = '#ffe070'; c.font = '16px monospace'; c.fillText('✦ ✦', e.x - 18, e.feet - 28 * e.sc - 4 + Math.sin(t / 90) * 3); }
+      if (e.status.stun > 0) { c.fillStyle = '#ffe070'; c.font = `16px ${FONT}`; c.fillText('✦ ✦', e.x - 18, e.feet - 28 * e.sc - 4 + Math.sin(t / 90) * 3); }
       if (e.status.bound > 0) { c.strokeStyle = '#55c060'; c.lineWidth = 3; c.strokeRect(e.x - 8 * e.sc, e.feet - 26 * e.sc, 16 * e.sc, 28 * e.sc); }
     }
     for (const f of this.fx) {
-      if (f.type === 'text') { c.globalAlpha = 1 - f.t; c.fillStyle = f.color; c.font = 'bold 22px monospace'; c.fillText(f.text, f.x - 20, f.y - f.t * 40); c.globalAlpha = 1; } else if (f.type === 'shot') {
+      if (f.type === 'text') { c.globalAlpha = 1 - f.t; c.fillStyle = f.color; c.font = `bold 22px ${FONT}`; c.fillText(f.text, f.x - 20, f.y - f.t * 40); c.globalAlpha = 1; } else if (f.type === 'shot') {
         const k = f.t / 0.25; c.strokeStyle = '#ffe9a0'; c.lineWidth = 3; c.beginPath();
         c.moveTo(f.x1 + (f.x2 - f.x1) * Math.max(0, k - 0.3), f.y1 + (f.y2 - f.y1) * Math.max(0, k - 0.3)); c.lineTo(f.x1 + (f.x2 - f.x1) * k, f.y1 + (f.y2 - f.y1) * k); c.stroke();
       }
@@ -432,28 +428,27 @@ export class Battle {
 
   drawEnemyHud(c, e) {
     const w = 96, x = e.x - w / 2, y = e.feet - 28 * e.sc - 44 - (e.cls === 'comandante' ? 12 : 0);
-    c.fillStyle = 'rgba(0,0,0,.65)'; c.fillRect(x - 2, y - 2, w + 4, 30);
-    c.fillStyle = '#3a1a1a'; c.fillRect(x, y + 14, w, 8);
-    c.fillStyle = '#d04a4a'; c.fillRect(x, y + 14, w * (e.hp / e.maxHp), 8);
-    c.fillStyle = '#fff'; c.font = '11px monospace'; c.fillText(e.name.replace(/^Mercenario (de )?/, '').replace(/^./, (m) => m.toUpperCase()).slice(0, 16), x, y + 10);
+    pixelPanel(c, x - 6, y - 4, w + 12, 32, '#7a3a3a');
+    pixelBar(c, x, y + 14, w, 8, e.hp / e.maxHp, '#d04a4a', '#3a1a1a');
+    c.fillStyle = '#fff'; c.font = `12px ${FONT}`; c.fillText(e.name.replace(/^Mercenario (de )?/, '').replace(/^./, (m) => m.toUpperCase()).slice(0, 16), x, y + 10);
     const it = e.intent;
     if (it && this.busy === false) {
       const label = e.status.stun > 0 ? 'Aturdido' : e.status.bound > 0 ? 'Atado' : it.label;
-      c.font = 'bold 11px monospace'; const tw = Math.min(190, c.measureText(label).width + 12);
-      c.fillStyle = it.warn && !(e.status.stun || e.status.bound) ? 'rgba(160,30,30,.9)' : 'rgba(40,40,60,.9)';
-      const bx = Math.max(4, Math.min(W - 4 - tw, e.x - tw / 2));
-      c.fillRect(bx, y - 22, tw, 16);
-      c.fillStyle = '#fff'; c.fillText(label, bx + 6, y - 10, tw - 8);
+      c.font = `600 12px ${FONT}`; const tw = Math.min(190, Math.round(c.measureText(label).width / 2) * 2 + 14);
+      const warn = it.warn && !(e.status.stun || e.status.bound);
+      const bx = Math.max(6, Math.min(W - 6 - tw, Math.round(e.x - tw / 2)));
+      pixelPanel(c, bx, y - 26, tw, 18, warn ? '#ff6b6b' : '#6a6a90', warn ? '#7a1c1c' : '#262640');
+      c.fillStyle = '#fff'; c.fillText(label, bx + 7, y - 13, tw - 10);
     }
     if (e.status.buff > 0) { c.fillStyle = '#ffb040'; c.fillText('▲', x + w - 10, y + 10); }
   }
 
   drawPlayerHud(c) {
     const p = this.p, x = 20, y = 272;
-    c.fillStyle = 'rgba(0,0,0,.65)'; c.fillRect(x - 4, y - 4, 190, 48);
-    c.fillStyle = '#fff'; c.font = '12px monospace'; c.fillText(`${game.state.flags.suit ? 'Root Knight' : 'Eduardo'} Nv${p.level}`, x, y + 10);
-    c.fillStyle = '#3a1a1a'; c.fillRect(x, y + 16, 180, 8); c.fillStyle = '#4ad06a'; c.fillRect(x, y + 16, 180 * (p.hp / p.maxHp), 8);
-    c.fillStyle = '#1a2a3a'; c.fillRect(x, y + 28, 180, 6); c.fillStyle = '#4aa0e0'; c.fillRect(x, y + 28, 180 * (p.energy / p.maxEnergy), 6);
+    pixelPanel(c, x - 8, y - 6, 196, 50);
+    c.fillStyle = '#fff'; c.font = `13px ${FONT}`; c.fillText(`${game.state.flags.suit ? 'Root Knight' : 'Eduardo'} Nv${p.level}`, x, y + 10);
+    pixelBar(c, x, y + 16, 180, 8, p.hp / p.maxHp, '#4ad06a', '#3a1a1a');
+    pixelBar(c, x, y + 30, 180, 6, p.energy / p.maxEnergy, '#4aa0e0', '#1a2a3a');
     c.fillStyle = '#fff'; c.fillText(`${p.hp}/${p.maxHp}`, x + 130, y + 10);
     if (this.ps.blind > 0) { c.fillStyle = '#bbb'; c.fillText('Cegado', x + 80, y + 10); }
   }

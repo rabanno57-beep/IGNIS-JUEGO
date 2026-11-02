@@ -13,6 +13,7 @@ import { World, VIEW_W, VIEW_H } from './world/world.js';
 import { Battle } from './combat/battle.js';
 import { createMarckFight } from './combat/marck.js';
 import { drawPerson } from './ui/sprites.js';
+import { drawTitleScene } from './ui/scenery.js';
 import { $, toast, setSaving, dialog, confirmBox, hideScreen, updateHud, setHint, fadeTo } from './ui/ui.js';
 import { titleScreen, pauseMenu, gameOverlay } from './ui/menus.js';
 
@@ -256,11 +257,7 @@ async function marckEnd({ result }) {
 /* ── Bucle ── */
 let last = performance.now(), hudT = 0;
 function drawTitleBackdrop(ctx, t) {
-  const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
-  g.addColorStop(0, '#0d2316'); g.addColorStop(1, '#2d5a31');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  ctx.fillStyle = '#143a1f';
-  for (let x = -20; x < VIEW_W; x += 64) ctx.fillRect(x, 0, 18, VIEW_H);
+  drawTitleScene(ctx, t);
   drawPerson(ctx, 500, 430, 7, 'rootknight');
 }
 
